@@ -155,21 +155,6 @@ namespace Nop.Services.Topics
                     storeId, showHidden, onlyIncludedInTopMenu,
                     _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer));
 
-            return _staticCacheManager.Get(key, () => GetAllTopics(storeId, keywords: string.Empty,
-                ignorAcl: ignorAcl, showHidden: showHidden, onlyIncludedInTopMenu: onlyIncludedInTopMenu));
-        }
-
-        /// <summary>
-        /// Gets all topics
-        /// </summary>
-        /// <param name="storeId">Store identifier; pass 0 to load all records</param>
-        /// <param name="keywords">Keywords to search into body or title</param>
-        /// <param name="ignorAcl">A value indicating whether to ignore ACL rules</param>
-        /// <param name="showHidden">A value indicating whether to show hidden topics</param>
-        /// <param name="onlyIncludedInTopMenu">A value indicating whether to show only topics which include on the top menu</param>
-        /// <returns>Topics</returns>
-        public virtual IList<Topic> GetAllTopics(int storeId, string keywords, bool ignorAcl = false, bool showHidden = false, bool onlyIncludedInTopMenu = false)
-        {
             var query = _topicRepository.Table;
             query = query.OrderBy(t => t.DisplayOrder).ThenBy(t => t.SystemName);
 
@@ -178,9 +163,6 @@ namespace Nop.Services.Topics
 
             if (onlyIncludedInTopMenu)
                 query = query.Where(t => t.IncludeInTopMenu);
-
-            if (!string.IsNullOrWhiteSpace(keywords))
-                query = query.Where(topic => topic.Title.Contains(keywords) || topic.Body.Contains(keywords));
 
             if ((storeId > 0 && !_catalogSettings.IgnoreStoreLimitations) ||
                 (!ignorAcl && !_catalogSettings.IgnoreAcl))
@@ -231,7 +213,38 @@ namespace Nop.Services.Topics
                 query = query.Distinct().OrderBy(t => t.DisplayOrder).ThenBy(t => t.SystemName);
             }
 
-            return query.ToList();
+            return query.ToCachedList(key);
+        }
+
+        /// <summary>
+        /// Gets all topics
+        /// </summary>
+        /// <param name="storeId">Store identifier; pass 0 to load all records</param>
+        /// <param name="keywords">Keywords to search into body or title</param>
+        /// <param name="ignorAcl">A value indicating whether to ignore ACL rules</param>
+        /// <param name="showHidden">A value indicating whether to show hidden topics</param>
+        /// <param name="onlyIncludedInTopMenu">A value indicating whether to show only topics which include on the top menu</param>
+        /// <returns>Topics</returns>
+        public virtual IList<Topic> GetAllTopics(int storeId, string keywords, bool ignorAcl = false, bool showHidden = false, bool onlyIncludedInTopMenu = false)
+        {
+            if (!string.IsNullOrWhiteSpace(keywords))
+            {
+                var lowerCaseKeywords = keywords.ToLower();
+                return GetAllTopics(storeId,
+                        ignorAcl: ignorAcl,
+                        showHidden: showHidden,
+                        onlyIncludedInTopMenu: onlyIncludedInTopMenu)
+                    .Where(topic => (topic.Title?.ToLower().Contains(lowerCaseKeywords) ?? false) ||
+                                    (topic.Body?.ToLower().Contains(lowerCaseKeywords) ?? false))
+                    .ToList();
+            }
+            else
+            {
+                return GetAllTopics(storeId,
+                        ignorAcl: ignorAcl,
+                        showHidden: showHidden,
+                        onlyIncludedInTopMenu: onlyIncludedInTopMenu);
+            }
         }
 
         /// <summary>
